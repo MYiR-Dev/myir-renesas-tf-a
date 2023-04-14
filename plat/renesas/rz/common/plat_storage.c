@@ -210,12 +210,15 @@ static int32_t open_emmcdrv(const uintptr_t spec)
 	return io_dev_init(emmcdrv_dev_handle, 0);
 }
 
+#define MAX_BOOTCHECK  4
+
 void rz_io_setup(void)
 {
 	const io_dev_connector_t *memmap;
 	const io_dev_connector_t *emmc;
 	const io_dev_connector_t *rzg2l;
 	uint16_t boot_dev;
+	int bootcheck_cnt=0;
 
 	boot_dev = *((uint16_t *)RZG2L_BOOTINFO_BASE) & MASK_BOOTM_DEVICE;
 
@@ -235,14 +238,26 @@ void rz_io_setup(void)
 	}
 	else if (boot_dev == BOOT_MODE_EMMC_1_8 ||
 		boot_dev == BOOT_MODE_EMMC_3_3) {
-		if (emmc_init() != EMMC_SUCCESS) {
-			NOTICE("BL2: Failed to eMMC driver initialize.\n");
-			panic();
-		}
-		emmc_memcard_power(EMMC_POWER_ON);
-		if (emmc_mount() != EMMC_SUCCESS) {
-			NOTICE("BL2: Failed to eMMC mount operation.\n");
-			panic();
+
+		for(bootcheck_cnt=0;bootcheck_cnt<=MAX_BOOTCHECK;bootcheck_cnt++){
+
+			if (emmc_init() != EMMC_SUCCESS) {
+				NOTICE("BL2: eMMC driver initialize %d .\n",bootcheck_cnt);
+				continue;
+			}
+
+			emmc_memcard_power(EMMC_POWER_ON);
+			if (emmc_mount() != EMMC_SUCCESS) {
+				NOTICE("BL2: eMMC mount operation %d .\n",bootcheck_cnt);
+			}else{
+				break;
+			}
+
+			if(bootcheck_cnt>=MAX_BOOTCHECK){
+				NOTICE("BL2: Failed to eMMC mount operation.\n");
+				panic();
+			}
+
 		}
 
 		register_io_dev_emmcdrv(&emmc);
